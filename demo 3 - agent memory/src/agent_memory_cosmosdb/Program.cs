@@ -1,9 +1,11 @@
 ﻿using System.Text.Json;
 using Agents;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.AzureCosmosDBNoSQL;
 using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
+using Microsoft.SemanticKernel.Embeddings;
 
 var azureOpenAIEndpoint = Configuration.GetValue("AZURE_OPENAI_ENDPOINT");
 var azureOpenAIApiKey = Configuration.GetValue("AZURE_OPENAI_APIKEY");
@@ -21,31 +23,32 @@ Kernel kernel = Kernel.CreateBuilder()
     .AddAzureCosmosDBNoSQLVectorStore(cosmosDbConnectionString, cosmosDbName)
     .Build();
 
-var textEmbeddingGenerationService = new AzureOpenAITextEmbeddingGenerationService(
-        azureOpenAIEmbeddedModel,
-        azureOpenAIEndpoint,
-        azureOpenAIApiKey);
+var embeddingService = new AzureOpenAITextEmbeddingGenerationService(azureOpenAIEmbeddedModel, azureOpenAIEndpoint, azureOpenAIApiKey);
 
 var cosmosClient = new CosmosClient(cosmosDbConnectionString, new CosmosClientOptions()
 {
     UseSystemTextJsonSerializerWithOptions = jsonSerializerOptions
 });
 var database = cosmosClient.GetDatabase(cosmosDbName);
-var collection = new AzureCosmosDBNoSQLVectorStoreRecordCollection<AgentDataModel>(
+var collection = new AzureCosmosDBNoSQLVectorStoreRecordCollection<AgentDataModelVector<string>>(
     database,
     collectionName,
     new()
     {
         JsonSerializerOptions = jsonSerializerOptions,
-        PartitionKeyPropertyName = nameof(AgentDataModel.Name)
+        PartitionKeyPropertyName = nameof(AgentDataModelVector<string>.Name)
     });
 await collection.CreateCollectionIfNotExistsAsync();
 
-var data = await AgentDataModel.CreateSampleDataAsync(textEmbeddingGenerationService);
-await Task.WhenAll(data.Select(x => collection.UpsertAsync(x)));
+var data = ModelFactory<string>.GetVectorDataAsync();
+foreach (var item in data)
+{
+    item.Vector = await embeddingService.GenerateEmbeddingAsync(item.Description);
+    await collection.UpsertAsync(item);
+}
 
 var searchString = "Who is working on my team as architect";
-var searchVector = await Agents.Embedding.GenerateEmbeddingAsync(searchString, textEmbeddingGenerationService);
+var searchVector = await embeddingService.GenerateEmbeddingAsync(searchString);
 var searchResult = await collection.VectorizedSearchAsync(searchVector, new() { Top = 1 });
 var resultRecords = await searchResult.Results.ToListAsync();
 var first = resultRecords.FirstOrDefault()?.Record;

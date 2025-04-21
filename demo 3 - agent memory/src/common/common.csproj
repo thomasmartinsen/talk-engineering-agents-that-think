@@ -22,4 +22,8 @@
 		<PackageReference Include="Microsoft.KernelMemory.Abstractions" Version="0.98.250324.1" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Data\" />
+	</ItemGroup>
+
 </Project>
