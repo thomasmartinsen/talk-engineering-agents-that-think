@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>demo.agents.agent_sample</AssemblyName>
+		<RootNamespace>Agents</RootNamespace>
+		<UserSecretsId>da727433-89b4-4d34-90a9-ebed1f9399d5</UserSecretsId>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Azure.AI.Projects" Version="1.0.0-beta.4" />
+		<PackageReference Include="Azure.Identity" Version="1.13.2" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.3" />
+		<PackageReference Include="Microsoft.KernelMemory" Version="0.98.250324.1" />
+		<PackageReference Include="Microsoft.KernelMemory.WebClient" Version="0.98.250324.1" />
+		<PackageReference Include="Microsoft.KernelMemory.Abstractions" Version="0.98.250324.1" />
+		<PackageReference Include="Microsoft.SemanticKernel.Agents.Abstractions" Version="1.47.0" />
+		<PackageReference Include="Microsoft.SemanticKernel.Agents.Core" Version="1.47.0" />
+		<PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" Version="1.47.0" />
+		<PackageReference Include="Microsoft.SemanticKernel.Connectors.InMemory" Version="1.47.0-preview" />
+		<PackageReference Include="Microsoft.SemanticKernel.Connectors.Qdrant" Version="1.47.0-preview" />
+		<PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.47.0" />
+		<PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.47.0" />
+		<PackageReference Include="ModelContextProtocol" Version="0.1.0-preview.8" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\common\common.csproj" />
+	</ItemGroup>
+
+</Project>

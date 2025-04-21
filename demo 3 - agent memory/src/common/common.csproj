@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>agents.common</AssemblyName>
+		<RootNamespace>Agents</RootNamespace>
+		<UserSecretsId>da727433-89b4-4d34-90a9-ebed1f9399d5</UserSecretsId>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.3" />
+		<PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="9.1.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.3" />
+		<PackageReference Include="Azure.AI.Projects" Version="1.0.0-beta.4" />
+		<PackageReference Include="Azure.Identity" Version="1.13.2" />
+		<PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.3" />
+		<PackageReference Include="Microsoft.KernelMemory" Version="0.98.250324.1" />
+		<PackageReference Include="Microsoft.KernelMemory.WebClient" Version="0.98.250324.1" />
+		<PackageReference Include="Microsoft.KernelMemory.Abstractions" Version="0.98.250324.1" />
+	</ItemGroup>
+
+</Project>
