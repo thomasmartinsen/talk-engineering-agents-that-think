@@ -1,4 +1,7 @@
-﻿namespace Agents;
+﻿using System.Security.Cryptography;
+using System.Text;
+
+namespace Agents;
 
 public class ModelFactory<T>
 {
@@ -66,5 +69,62 @@ public class ModelFactory<T>
         };
 
         return _currentKey;
+    }
+
+    public static List<AgentDataModelVector<T>> GetSemanticKernelSampleData()
+    {
+        List<string> documentation =
+       [
+           "https://raw.githubusercontent.com/microsoft/kernel-memory/main/README.md",
+            "https://microsoft.github.io/kernel-memory/quickstart",
+            "https://microsoft.github.io/kernel-memory/quickstart/configuration",
+            "https://microsoft.github.io/kernel-memory/quickstart/start-service",
+            "https://microsoft.github.io/kernel-memory/quickstart/python",
+            "https://microsoft.github.io/kernel-memory/quickstart/csharp",
+            "https://microsoft.github.io/kernel-memory/quickstart/java",
+            "https://microsoft.github.io/kernel-memory/quickstart/javascript",
+            "https://microsoft.github.io/kernel-memory/quickstart/bash",
+            "https://microsoft.github.io/kernel-memory/service",
+            "https://microsoft.github.io/kernel-memory/service/architecture",
+            "https://microsoft.github.io/kernel-memory/serverless",
+            "https://microsoft.github.io/kernel-memory/security/filters",
+            "https://microsoft.github.io/kernel-memory/how-to/custom-partitioning",
+            "https://microsoft.github.io/kernel-memory/concepts/indexes",
+            "https://microsoft.github.io/kernel-memory/concepts/document",
+            "https://microsoft.github.io/kernel-memory/concepts/memory",
+            "https://microsoft.github.io/kernel-memory/concepts/tag",
+            "https://microsoft.github.io/kernel-memory/concepts/llm",
+            "https://microsoft.github.io/kernel-memory/concepts/embedding",
+            "https://microsoft.github.io/kernel-memory/concepts/cosine-similarity",
+            "https://microsoft.github.io/kernel-memory/faq",
+            "https://raw.githubusercontent.com/microsoft/semantic-kernel/main/README.md",
+            "https://raw.githubusercontent.com/microsoft/semantic-kernel/main/dotnet/README.md",
+            "https://raw.githubusercontent.com/microsoft/semantic-kernel/main/python/README.md",
+            "https://raw.githubusercontent.com/microsoft/semantic-kernel/main/java/README.md",
+            "https://learn.microsoft.com/en-us/semantic-kernel/overview/",
+            "https://learn.microsoft.com/en-us/semantic-kernel/get-started/quick-start-guide",
+            "https://learn.microsoft.com/en-us/semantic-kernel/agents/",
+        ];
+
+        List<AgentDataModelVector<T>> data = new();
+
+        foreach (var item in documentation)
+        {
+            var id = GetUrlId(item);
+            data.Add(new AgentDataModelVector<T>
+            {
+                id = KeyGeneratorReturnNext(),
+                Name = item,
+                Tags = new[] { item, id },
+                Description = id,
+            });
+        }
+
+        return data;
+    }
+
+    private static string GetUrlId(string url)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url))).ToUpperInvariant();
     }
 }

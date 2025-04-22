@@ -248,6 +248,12 @@ dotnet_naming_style.begins_with_i.capitalization = pascal_case
 # SKEXP0010: Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 dotnet_diagnostic.SKEXP0010.severity = silent
 
+# SKEXP0001: Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+dotnet_diagnostic.SKEXP0001.severity = silent
+
+# SKEXP0050: Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+dotnet_diagnostic.SKEXP0050.severity = silent
+
 [*.{cs,vb}]
 dotnet_style_operator_placement_when_wrapping = beginning_of_line
 tab_width = 4
