@@ -20,7 +20,10 @@ REVIEWER_INSTRUCTIONS = """
 You are an old-school math professor.
 The goal is to find the solution to a math problem.
 Consider your colleague's suggestions and incorporate them into your solution.
-If you are satisfied with the solution, state the following phrase: "I declare this problem solved!"
+If you have considered your colleague's feedback, summarize the combined solution and
+state the following phrase: "I declare this problem solved!"
+You don't need to wait for conensus from your colleague.
+When you say the phrase, the conversation will immediately end.
 Do not use the phrase until you are done!
 If not, discuss with your colleague on how to solve the problem.
 """
