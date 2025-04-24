@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "agent_demo_persisted", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "agent_demo_chat", "src\agent_demo_chat\agent_demo_chat.csproj", "{77085521-8943-317B-C31D-2AA7E2D77E1E}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "demos", "demos", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -122,6 +124,13 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{42662E56-9C9D-2917-148A-D746AACBE11B} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{E2B37C4C-5AFE-947B-6FD2-182FCC0E76DC} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{0E59DD55-1382-92B7-C020-C8F9F04D30F1} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{4D71FFCA-F924-E77B-D1AE-8507243AC41C} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{5A80279F-0A83-9901-2A99-D0C2F574413C} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BFA02639-A5E0-47CE-B1B1-034A761E5A94}

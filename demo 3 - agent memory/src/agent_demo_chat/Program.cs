@@ -2,6 +2,7 @@
 using Agents.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Data;
@@ -15,10 +16,17 @@ var AZURE_OPENAI_CHAT_MODELID = Configuration.GetValue("AZURE_OPENAI_CHAT_MODELI
 var AZURE_OPENAI_EMBEDDING_MODELID = Configuration.GetValue("AZURE_OPENAI_EMBEDDING_MODELID");
 
 string VECTOR_STORE_HOST = "localhost";
-string USER_COLLECTION = "user_data";
+string USER_COLLECTION = "user_queries";
 string NEWS_COLLECTION = "news_articles";
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.SemanticKernel", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http", LogLevel.Warning);
 
 CancellationTokenSource appShutdownCancellationTokenSource = new();
 CancellationToken appShutdownCancellationToken = appShutdownCancellationTokenSource.Token;
@@ -29,6 +37,7 @@ kernelBuilder.AddAzureOpenAIChatCompletion(AZURE_OPENAI_CHAT_MODELID, AZURE_OPEN
 kernelBuilder.AddOpenAITextEmbeddingGeneration(OPENAI_EMBEDDING_MODELID, OPENAI_APIKEY);
 kernelBuilder.AddQdrantVectorStore(VECTOR_STORE_HOST);
 kernelBuilder.AddQdrantVectorStoreRecordCollection<Guid, TextSnippet<Guid>>(NEWS_COLLECTION, VECTOR_STORE_HOST);
+kernelBuilder.AddQdrantVectorStoreRecordCollection<Guid, UserQuery>(USER_COLLECTION, VECTOR_STORE_HOST);
 
 RegisterServices<Guid>(builder, kernelBuilder);
 
@@ -43,12 +52,15 @@ void RegisterServices<TKey>(HostApplicationBuilder builder, IKernelBuilder kerne
         new TextSearchResultMapper((result) =>
         {
             var castResult = result as TextSnippet<TKey>;
-            return new TextSearchResult(value: castResult!.Text!) { Name = castResult.ReferenceDescription, Link = castResult.ReferenceLink };
+            return new TextSearchResult(value: castResult!.Text!)
+            {
+                Name = castResult.ReferenceDescription,
+                Link = castResult.ReferenceLink
+            };
         }));
 
     builder.Services.AddSingleton<UniqueKeyGenerator<Guid>>(new UniqueKeyGenerator<Guid>(() => Guid.NewGuid()));
     builder.Services.AddSingleton<UniqueKeyGenerator<string>>(new UniqueKeyGenerator<string>(() => Guid.NewGuid().ToString()));
-    //builder.Services.AddSingleton<IDataLoader, DataLoader<TKey>>();
 
-    builder.Services.AddHostedService<ChatService<TKey>>();
+    builder.Services.AddHostedService<ChatServiceWithPrediction<TKey>>();
 }

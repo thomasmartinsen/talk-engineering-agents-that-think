@@ -5,15 +5,17 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using Microsoft.SemanticKernel.Data;
 using Microsoft.SemanticKernel.Embeddings;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 
 namespace Agents;
 
-internal sealed class ChatService<TKey>(
+internal sealed class ChatServiceWithPrediction<TKey>(
     UniqueKeyGenerator<TKey> uniqueKeyGenerator,
     IVectorStoreRecordCollection<TKey, TextSnippet<TKey>> newsCollection,
+    IVectorStoreRecordCollection<TKey, UserQuery> userQueryCollection,
     ITextEmbeddingGenerationService embeddingService,
     IChatCompletionService chatCompletionService,
     VectorStoreTextSearch<TextSnippet<TKey>> vectorStoreTextSearch,
@@ -65,17 +67,23 @@ internal sealed class ChatService<TKey>(
             return;
         }
 
+        Console.Clear();
         Console.WriteLine("News data loading complete\n");
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Agent: Press enter with no prompt to exit.");
 
+        // Add a search plugin to the kernel which we will use in the template below
+        // to do a vector search for related information to the user query.
         kernel.Plugins.Add(vectorStoreTextSearch.CreateWithGetTextSearchResults("SearchPlugin"));
 
+        var predictedQuery = await GenerateMostUsedQueryAsync();
+
+        // Start the chat loop.
         while (!cancellationToken.IsCancellationRequested)
         {
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Agent: What would you like to know?");
+            Console.WriteLine($"Agent: What would you like to know? (type x and enter to get a predicted query)");
 
             Console.ForegroundColor = ConsoleColor.White;
             Console.Write("User: ");
@@ -86,6 +94,14 @@ internal sealed class ChatService<TKey>(
                 appShutdownCancellationTokenSource.Cancel();
                 break;
             }
+
+            if (question.Equals("x", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"User: {predictedQuery}");
+                question = predictedQuery;
+            }
+
+            await PersistUserQueryAsync(question, cancellationToken);
 
             var response = kernel.InvokePromptStreamingAsync(
                 promptTemplate: """
@@ -111,23 +127,23 @@ internal sealed class ChatService<TKey>(
                 promptTemplateFactory: new HandlebarsPromptTemplateFactory(),
                 cancellationToken: cancellationToken);
 
+            try
+            {
+                await foreach (var message in response.ConfigureAwait(false))
+                {
+                    Console.Write(message);
+                }
+
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Call to LLM failed with error: {ex}");
+            }
+
             Console.ForegroundColor = ConsoleColor.Green;
             Console.Write("\nAssistant: ");
-
-            //try
-            //{
-            //    await foreach (var message in response.ConfigureAwait(false))
-            //    {
-            //        Console.Write(message);
-            //    }
-
-            //    Console.WriteLine();
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.ForegroundColor = ConsoleColor.Red;
-            //    Console.WriteLine($"Call to LLM failed with error: {ex}");
-            //}
         }
     }
 
@@ -179,6 +195,7 @@ internal sealed class ChatService<TKey>(
                     await newsCollection.UpsertAsync(article);
 
                     Console.WriteLine($"Fetched news article from {item.Link}");
+                    Console.Clear();
                 }
             }
         }
@@ -212,5 +229,128 @@ internal sealed class ChatService<TKey>(
         Console.WriteLine($"{result?.ReferenceLink}");
 
         return result;
+    }
+
+    private async Task PersistUserQueryAsync(string query, CancellationToken cancellationToken)
+    {
+        _ = query ?? throw new ArgumentNullException(nameof(query));
+
+        await userQueryCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
+
+        string summary = await GenerateSummaryAsync(query, cancellationToken) ?? "";
+        var embedding = await embeddingService.GenerateEmbeddingAsync(query, cancellationToken: cancellationToken);
+
+        var userQuery = new UserQuery
+        {
+            Query = query,
+            Summary = summary,
+            Embedding = embedding,
+        };
+
+        await userQueryCollection.UpsertAsync(userQuery, cancellationToken);
+    }
+
+    private async Task<string?> GenerateSummaryAsync(string query, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chatHistory = new ChatHistory();
+
+            chatHistory.AddSystemMessage("You are a helpful assistant that summarizes user queries concisely in one sentence.");
+            chatHistory.AddUserMessage($"Summarize the following query: {query}");
+
+            var executionSettings = new AzureOpenAIPromptExecutionSettings
+            {
+                MaxTokens = 50,
+                Temperature = 0.7
+            };
+
+            var response = await chatCompletionService.GetChatMessageContentAsync(
+                chatHistory: chatHistory,
+                executionSettings: executionSettings,
+                cancellationToken: cancellationToken);
+
+            _ = response ?? throw new Exception("No summary generated.");
+
+            return response.Content?.Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to generate summary: {ex.Message}");
+            return "Summary generation failed.";
+        }
+    }
+
+    private async Task<string?> GenerateMostUsedQueryAsync(string? currentQuery = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await userQueryCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
+
+            var recentQueries = new List<UserQuery>();
+            var searchVector = await embeddingService.GenerateEmbeddingAsync(
+                "Recent user queries", cancellationToken: cancellationToken);
+
+            var searchOptions = new VectorSearchOptions<UserQuery>
+            {
+                Top = 5,
+                IncludeVectors = false,
+            };
+
+            var queryResults = await userQueryCollection.VectorizedSearchAsync(
+                vector: searchVector,
+                options: searchOptions,
+                cancellationToken: cancellationToken);
+
+            await foreach (var result in queryResults.Results.WithCancellation(cancellationToken))
+            {
+                if (result.Record != null)
+                {
+                    recentQueries.Add(result.Record);
+                }
+            }
+
+            if (recentQueries.Count == 0)
+            {
+                return null;
+            }
+
+            var queryHistoryText = string.Join("\n", recentQueries.Select((q, i) => $"{i + 1}. Query: {q.Query}\n   Summary: {q.Summary}"));
+
+            // Create a chat history to prompt the model
+            var chatHistory = new ChatHistory();
+
+            chatHistory.AddSystemMessage(@"You are an AI assistant that analyzes user query patterns and predicts what they might ask next.
+Based on the user's query history, generate a single likely question they might ask in their next interaction.
+Make the prediction contextually relevant to their recent queries and interests.
+Return ONLY the predicted question without any explanations or prefixes.");
+
+            chatHistory.AddUserMessage($@"Here are the user's recent queries:
+
+{queryHistoryText}
+
+{(currentQuery != null ? $"Current context: {currentQuery}" : "")}
+
+Based on this history, what is a single likely question the user might ask next?");
+
+            var executionSettings = new AzureOpenAIPromptExecutionSettings
+            {
+                MaxTokens = 100,
+                Temperature = 0.7,
+                TopP = 0.95
+            };
+
+            var response = await chatCompletionService.GetChatMessageContentAsync(
+                chatHistory: chatHistory,
+                executionSettings: executionSettings,
+                cancellationToken: cancellationToken);
+
+            return response == null || string.IsNullOrWhiteSpace(response.Content) ? null : response.Content.Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to generate most used query: {ex.Message}");
+            return null;
+        }
     }
 }
