@@ -55,5 +55,5 @@ void RegisterServices<TKey>(HostApplicationBuilder builder, IKernelBuilder kerne
     builder.Services.AddSingleton<UniqueKeyGenerator<Guid>>(new UniqueKeyGenerator<Guid>(() => Guid.NewGuid()));
     builder.Services.AddSingleton<UniqueKeyGenerator<string>>(new UniqueKeyGenerator<string>(() => Guid.NewGuid().ToString()));
 
-    builder.Services.AddHostedService<ChatServiceWithMemory<TKey>>();
+    builder.Services.AddHostedService<ChatServiceWithPrediction<TKey>>();
 }
