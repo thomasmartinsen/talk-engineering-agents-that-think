@@ -12,7 +12,8 @@ var AZURE_OPENAI_APIKEY = Configuration.GetValue("AZURE_OPENAI_APIKEY");
 var AZURE_OPENAI_CHAT_MODELID = Configuration.GetValue("AZURE_OPENAI_CHAT_MODELID");
 var AZURE_OPENAI_EMBEDDING_MODELID = Configuration.GetValue("AZURE_OPENAI_EMBEDDING_MODELID");
 
-string memoryCollection = "collection";
+string feedbackCollection = "news_top_stories_feedback";
+string newsCollection = "news_top_stories";
 
 var memory = new MemoryBuilder()
            .WithMemoryStore(new VolatileMemoryStore())
@@ -21,29 +22,65 @@ var memory = new MemoryBuilder()
 
 await StoreMemoryAsync(memory);
 Console.WriteLine("How can I help you?");
+
 while (true)
 {
     Console.Write("> ");
-    var query = Console.ReadLine() ?? "Any news about Tesla?";
+    string query = Console.ReadLine() ?? "";
+
+    if (query.StartsWith('_'))
+    {
+        Console.WriteLine("\nPlease share your feedback to optimize your news stories? (press Enter to skip)");
+        var feedback = Console.ReadLine();
+
+        if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            var feedbackEntry = $"FEEDBACK on {DateTime.UtcNow:yyyy-MM-dd}: {feedback}";
+            await memory.SaveInformationAsync(feedbackCollection, feedbackEntry, $"feedback-{Guid.NewGuid()}");
+            query = "feedback";
+        }
+    }
+
     await SearchMemoryAsync(memory, query);
 }
 
 async Task SearchMemoryAsync(ISemanticTextMemory memory, string query)
 {
-    var memoryResults =
+    IAsyncEnumerable<MemoryQueryResult> memoryResults = null;
+    IAsyncEnumerable<MemoryQueryResult> feedbackResults = null;
+
+    if (!string.IsNullOrEmpty(query) && query == "feedback")
+    {
+        feedbackResults =
+            memory.SearchAsync(
+                feedbackCollection,
+                "FEEDBACK",
+                limit: 5);
+
+        await PrintNewsAsync(feedbackResults!);
+        return;
+    }
+
+    if (string.IsNullOrEmpty(query) || query == "list")
+    {
+        memoryResults =
+            memory.SearchAsync(
+                newsCollection,
+                " ",
+                limit: 20);
+
+        await PrintNewsAsync(memoryResults!);
+        return;
+    }
+
+    memoryResults =
         memory.SearchAsync(
-            memoryCollection,
+            newsCollection,
             query,
             limit: 1,
             minRelevanceScore: 0.5);
 
-    await foreach (MemoryQueryResult memoryResult in memoryResults)
-    {
-        Console.WriteLine(memoryResult.Metadata.Text);
-        Console.WriteLine(memoryResult.Metadata.Id);
-        Console.WriteLine(memoryResult.Relevance);
-        Console.WriteLine();
-    }
+    await PrintNewsAsync(memoryResults!);
 }
 
 async Task StoreMemoryAsync(ISemanticTextMemory memory)
@@ -57,7 +94,7 @@ async Task StoreMemoryAsync(ISemanticTextMemory memory)
         foreach (var item in entry.Value)
         {
             await memory.SaveInformationAsync(
-                collection: memoryCollection,
+                collection: newsCollection,
                 id: item.Id,
                 text: item.Title);
         }
@@ -85,4 +122,15 @@ static async Task<Dictionary<string, IEnumerable<FeedItem>>> GetTopStoriesAsync(
     }
 
     return result;
+}
+
+static async Task PrintNewsAsync(IAsyncEnumerable<MemoryQueryResult> memoryResults)
+{
+    await foreach (MemoryQueryResult memoryResult in memoryResults!.OrderByDescending(x => x.Relevance))
+    {
+        Console.WriteLine(memoryResult.Metadata.Text);
+        Console.WriteLine(memoryResult.Metadata.Id);
+        Console.WriteLine(memoryResult.Relevance);
+        Console.WriteLine();
+    }
 }
