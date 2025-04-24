@@ -1,0 +1,3 @@
+azure-ai-projects==1.0.0b9
+semantic-kernel[azure]==1.28.1
+azure-identity
