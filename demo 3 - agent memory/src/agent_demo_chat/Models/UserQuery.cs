@@ -2,16 +2,16 @@
 
 namespace Agents.Models;
 
-public class UserData
+public class UserQuery
 {
     [VectorStoreRecordKey]
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    [VectorStoreRecordData(IsFilterable = true)]
-    public string Kind { get; set; }
+    [VectorStoreRecordData]
+    public string Query { get; set; }
 
     [VectorStoreRecordData]
-    public string Text { get; set; }
+    public string Summary { get; set; }
 
     [VectorStoreRecordData]
     public string TimeStamp { get; set; }

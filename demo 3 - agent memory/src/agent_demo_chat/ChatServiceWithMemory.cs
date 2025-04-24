@@ -5,15 +5,17 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using Microsoft.SemanticKernel.Data;
 using Microsoft.SemanticKernel.Embeddings;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 
 namespace Agents;
 
-internal sealed class ChatService<TKey>(
+internal sealed class ChatServiceWithMemory<TKey>(
     UniqueKeyGenerator<TKey> uniqueKeyGenerator,
     IVectorStoreRecordCollection<TKey, TextSnippet<TKey>> newsCollection,
+    IVectorStoreRecordCollection<TKey, UserQuery> userQueryCollection,
     ITextEmbeddingGenerationService embeddingService,
     IChatCompletionService chatCompletionService,
     VectorStoreTextSearch<TextSnippet<TKey>> vectorStoreTextSearch,
@@ -70,8 +72,11 @@ internal sealed class ChatService<TKey>(
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Agent: Press enter with no prompt to exit.");
 
+        // Add a search plugin to the kernel which we will use in the template below
+        // to do a vector search for related information to the user query.
         kernel.Plugins.Add(vectorStoreTextSearch.CreateWithGetTextSearchResults("SearchPlugin"));
 
+        // Start the chat loop.
         while (!cancellationToken.IsCancellationRequested)
         {
             Console.ForegroundColor = ConsoleColor.Green;
@@ -86,6 +91,8 @@ internal sealed class ChatService<TKey>(
                 appShutdownCancellationTokenSource.Cancel();
                 break;
             }
+
+            await PersistUserQueryAsync(question, cancellationToken);
 
             var response = kernel.InvokePromptStreamingAsync(
                 promptTemplate: """
@@ -111,23 +118,23 @@ internal sealed class ChatService<TKey>(
                 promptTemplateFactory: new HandlebarsPromptTemplateFactory(),
                 cancellationToken: cancellationToken);
 
+            try
+            {
+                await foreach (var message in response.ConfigureAwait(false))
+                {
+                    Console.Write(message);
+                }
+
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Call to LLM failed with error: {ex}");
+            }
+
             Console.ForegroundColor = ConsoleColor.Green;
             Console.Write("\nAssistant: ");
-
-            //try
-            //{
-            //    await foreach (var message in response.ConfigureAwait(false))
-            //    {
-            //        Console.Write(message);
-            //    }
-
-            //    Console.WriteLine();
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.ForegroundColor = ConsoleColor.Red;
-            //    Console.WriteLine($"Call to LLM failed with error: {ex}");
-            //}
         }
     }
 
@@ -144,9 +151,9 @@ internal sealed class ChatService<TKey>(
 
             var newsSources = new Dictionary<string, string>
             {
-                ["CNN Top Stories"] = "http://rss.cnn.com/rss/cnn_topstories.rss",
-                ["BBC Top Stories"] = "https://feeds.bbci.co.uk/news/rss.xml",
-                ["NY Times Top Stories"] = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+                [".NET blog"] = "https://devblogs.microsoft.com/dotnet/feed/",
+                ["Semantic Kernel blog"] = "https://devblogs.microsoft.com/semantic-kernel/feed/",
+                ["Azure AI Foundry blog"] = "https://devblogs.microsoft.com/foundry/feed/"
             };
 
             var articles = new List<TextSnippet<TKey>>();
@@ -207,5 +214,55 @@ internal sealed class ChatService<TKey>(
         var searchResult = await newsArticles.Results.FirstOrDefaultAsync();
 
         return searchResult?.Record;
+    }
+
+    private async Task PersistUserQueryAsync(string query, CancellationToken cancellationToken)
+    {
+        _ = query ?? throw new ArgumentNullException(nameof(query));
+
+        await userQueryCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
+
+        string summary = await GenerateSummaryAsync(query, cancellationToken) ?? "";
+        var embedding = await embeddingService.GenerateEmbeddingAsync(query, cancellationToken: cancellationToken);
+
+        var userQuery = new UserQuery
+        {
+            Query = query,
+            Summary = summary,
+            Embedding = embedding,
+        };
+
+        await userQueryCollection.UpsertAsync(userQuery, cancellationToken);
+    }
+
+    private async Task<string?> GenerateSummaryAsync(string query, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chatHistory = new ChatHistory();
+
+            chatHistory.AddSystemMessage("You are a helpful assistant that summarizes user queries concisely in one sentence.");
+            chatHistory.AddUserMessage($"Summarize the following query: {query}");
+
+            var executionSettings = new AzureOpenAIPromptExecutionSettings
+            {
+                MaxTokens = 50,
+                Temperature = 0.7
+            };
+
+            var response = await chatCompletionService.GetChatMessageContentAsync(
+                chatHistory: chatHistory,
+                executionSettings: executionSettings,
+                cancellationToken: cancellationToken);
+
+            _ = response ?? throw new Exception("No summary generated.");
+
+            return response.Content?.Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to generate summary: {ex.Message}");
+            return "Summary generation failed.";
+        }
     }
 }
