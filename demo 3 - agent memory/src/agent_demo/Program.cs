@@ -1,4 +1,5 @@
 ﻿using Agents;
+using CodeHollow.FeedReader;
 using Microsoft.KernelMemory;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Memory;
@@ -11,88 +12,125 @@ var AZURE_OPENAI_APIKEY = Configuration.GetValue("AZURE_OPENAI_APIKEY");
 var AZURE_OPENAI_CHAT_MODELID = Configuration.GetValue("AZURE_OPENAI_CHAT_MODELID");
 var AZURE_OPENAI_EMBEDDING_MODELID = Configuration.GetValue("AZURE_OPENAI_EMBEDDING_MODELID");
 
-string memoryCollection = "daily-news-memory";
-string[] newsSources =
-{
-    "http://rss.cnn.com/rss/cnn_topstories.rss",
-    "https://feeds.bbci.co.uk/news/rss.xml",
-    //"https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
-};
+string feedbackCollection = "news_top_stories_feedback";
+string newsCollection = "news_top_stories";
 
 var memory = new MemoryBuilder()
            .WithMemoryStore(new VolatileMemoryStore())
            .WithOpenAITextEmbeddingGeneration(OPENAI_EMBEDDING_MODELID, OPENAI_APIKEY)
            .Build();
 
-Console.WriteLine("Fetching top news headlines...");
-
-//foreach (var feedUrl in newsSources)
-//{
-//    var feed = await FeedReader.ReadAsync(feedUrl);
-//    foreach (var item in feed.Items.Take(3))
-//    {
-//        var content = $"{item.Title}\n{item.Description}";
-//        Console.WriteLine($"Saving to memory: {item.Title}");
-//        await memory.SaveInformationAsync(memoryCollection, content, item.Link);
-//    }
-//}
-
 await StoreMemoryAsync(memory);
-await SearchMemoryAsync(memory, "How do I get started?");
-await SearchMemoryAsync(memory, "Can I build a chat with SK?");
+Console.WriteLine("How can I help you?");
+
+while (true)
+{
+    Console.Write("> ");
+    string query = Console.ReadLine() ?? "";
+
+    if (query.StartsWith('_'))
+    {
+        Console.WriteLine("\nPlease share your feedback to optimize your news stories? (press Enter to skip)");
+        var feedback = Console.ReadLine();
+
+        if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            var feedbackEntry = $"FEEDBACK on {DateTime.UtcNow:yyyy-MM-dd}: {feedback}";
+            await memory.SaveInformationAsync(feedbackCollection, feedbackEntry, $"feedback-{Guid.NewGuid()}");
+            query = "feedback";
+        }
+    }
+
+    await SearchMemoryAsync(memory, query);
+}
 
 async Task SearchMemoryAsync(ISemanticTextMemory memory, string query)
 {
-    Console.WriteLine("\nQuery: " + query + "\n");
+    IAsyncEnumerable<MemoryQueryResult> memoryResults = null;
+    IAsyncEnumerable<MemoryQueryResult> feedbackResults = null;
 
-    var memoryResults = memory.SearchAsync(memoryCollection, query, limit: 2, minRelevanceScore: 0.5);
-
-    int i = 0;
-    await foreach (MemoryQueryResult memoryResult in memoryResults)
+    if (!string.IsNullOrEmpty(query) && query == "feedback")
     {
-        Console.WriteLine($"Result {++i}:");
-        Console.WriteLine("  URL:     : " + memoryResult.Metadata.Id);
-        Console.WriteLine("  Title    : " + memoryResult.Metadata.Description);
-        Console.WriteLine("  Relevance: " + memoryResult.Relevance);
-        Console.WriteLine();
+        feedbackResults =
+            memory.SearchAsync(
+                feedbackCollection,
+                "FEEDBACK",
+                limit: 5);
+
+        await PrintNewsAsync(feedbackResults!);
+        return;
     }
 
-    Console.WriteLine("----------------------");
+    if (string.IsNullOrEmpty(query) || query == "list")
+    {
+        memoryResults =
+            memory.SearchAsync(
+                newsCollection,
+                " ",
+                limit: 20);
+
+        await PrintNewsAsync(memoryResults!);
+        return;
+    }
+
+    memoryResults =
+        memory.SearchAsync(
+            newsCollection,
+            query,
+            limit: 1,
+            minRelevanceScore: 0.5);
+
+    await PrintNewsAsync(memoryResults!);
 }
 
 async Task StoreMemoryAsync(ISemanticTextMemory memory)
 {
-    Console.WriteLine("\nAdding some GitHub file URLs and their descriptions to the semantic memory.");
-    var githubFiles = SampleData();
+    Console.WriteLine("\nAdding lastest top stories from major news sources to the semantic memory.");
+    var entries = await GetTopStoriesAsync();
+
     var i = 0;
-    foreach (var entry in githubFiles)
+    foreach (var entry in entries)
     {
-        await memory.SaveReferenceAsync(
-            collection: memoryCollection,
-            externalSourceName: "GitHub",
-            externalId: entry.Key,
-            description: entry.Value,
-            text: entry.Value);
+        foreach (var item in entry.Value)
+        {
+            await memory.SaveInformationAsync(
+                collection: newsCollection,
+                id: item.Id,
+                text: item.Title);
+        }
 
-        Console.Write($" #{++i} saved.");
+        Console.WriteLine($" #{++i} saved.");
     }
-
-    Console.WriteLine("\n----------------------");
 }
 
-static Dictionary<string, string> SampleData()
+static async Task<Dictionary<string, IEnumerable<FeedItem>>> GetTopStoriesAsync()
 {
-    return new Dictionary<string, string>
+    var newsSources = new Dictionary<string, string>
     {
-        ["https://github.com/microsoft/semantic-kernel/blob/main/README.md"]
-            = "README: Installation, getting started, and how to contribute",
-        ["https://github.com/microsoft/semantic-kernel/blob/main/dotnet/notebooks/02-running-prompts-from-file.ipynb"]
-            = "Jupyter notebook describing how to pass prompts from a file to a semantic plugin or function",
-        ["https://github.com/microsoft/semantic-kernel/blob/main/dotnet/notebooks/00-getting-started.ipynb"]
-            = "Jupyter notebook describing how to get started with the Semantic Kernel",
-        ["https://github.com/microsoft/semantic-kernel/tree/main/prompt_template_samples/ChatPlugin/ChatGPT"]
-            = "Sample demonstrating how to create a chat plugin interfacing with ChatGPT",
-        ["https://github.com/microsoft/semantic-kernel/blob/main/dotnet/src/Plugins/Plugins.Memory/VolatileMemoryStore.cs"]
-            = "C# class that defines a volatile embedding store",
+        ["CNN Top Stories"] = "http://rss.cnn.com/rss/cnn_topstories.rss",
+        ["BBC Top Stories"] = "https://feeds.bbci.co.uk/news/rss.xml",
+        ["NY Times Top Stories"] = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
     };
+
+    var result = new Dictionary<string, IEnumerable<FeedItem>>();
+
+    foreach (var feedUrl in newsSources)
+    {
+        var feed = await FeedReader.ReadAsync(feedUrl.Value);
+        var content = feed.Items.Take(5);
+        result.Add(feedUrl.Key, content);
+    }
+
+    return result;
+}
+
+static async Task PrintNewsAsync(IAsyncEnumerable<MemoryQueryResult> memoryResults)
+{
+    await foreach (MemoryQueryResult memoryResult in memoryResults!.OrderByDescending(x => x.Relevance))
+    {
+        Console.WriteLine(memoryResult.Metadata.Text);
+        Console.WriteLine(memoryResult.Metadata.Id);
+        Console.WriteLine(memoryResult.Relevance);
+        Console.WriteLine();
+    }
 }
