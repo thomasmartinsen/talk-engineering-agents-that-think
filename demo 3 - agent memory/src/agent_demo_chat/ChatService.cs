@@ -114,20 +114,20 @@ internal sealed class ChatService<TKey>(
             Console.ForegroundColor = ConsoleColor.Green;
             Console.Write("\nAssistant: ");
 
-            //try
-            //{
-            //    await foreach (var message in response.ConfigureAwait(false))
-            //    {
-            //        Console.Write(message);
-            //    }
+            try
+            {
+                await foreach (var message in response.ConfigureAwait(false))
+                {
+                    Console.Write(message);
+                }
 
-            //    Console.WriteLine();
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.ForegroundColor = ConsoleColor.Red;
-            //    Console.WriteLine($"Call to LLM failed with error: {ex}");
-            //}
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Call to LLM failed with error: {ex}");
+            }
         }
     }
 
