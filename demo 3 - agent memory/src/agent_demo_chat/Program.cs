@@ -2,6 +2,7 @@
 using Agents.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Data;
@@ -18,8 +19,14 @@ string VECTOR_STORE_HOST = "localhost";
 string USER_COLLECTION = "user_queries";
 string NEWS_COLLECTION = "news_articles";
 
-//HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
-HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.SemanticKernel", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http", LogLevel.Warning);
 
 CancellationTokenSource appShutdownCancellationTokenSource = new();
 CancellationToken appShutdownCancellationToken = appShutdownCancellationTokenSource.Token;

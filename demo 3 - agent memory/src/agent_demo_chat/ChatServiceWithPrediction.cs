@@ -67,6 +67,7 @@ internal sealed class ChatServiceWithPrediction<TKey>(
             return;
         }
 
+        Console.Clear();
         Console.WriteLine("News data loading complete\n");
 
         Console.ForegroundColor = ConsoleColor.Green;
@@ -96,7 +97,7 @@ internal sealed class ChatServiceWithPrediction<TKey>(
 
             if (question.Equals("x", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"Predicted query: {predictedQuery}");
+                Console.WriteLine($"User: {predictedQuery}");
                 question = predictedQuery;
             }
 
@@ -157,6 +158,8 @@ internal sealed class ChatServiceWithPrediction<TKey>(
         {
             await newsCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
 
+            Console.WriteLine("Loading data...");
+
             var newsSources = new Dictionary<string, string>
             {
                 [".NET blog"] = "https://devblogs.microsoft.com/dotnet/feed/",
@@ -192,6 +195,7 @@ internal sealed class ChatServiceWithPrediction<TKey>(
                     await newsCollection.UpsertAsync(article);
 
                     Console.WriteLine($"Fetched news article from {item.Link}");
+                    Console.Clear();
                 }
             }
         }
@@ -221,7 +225,10 @@ internal sealed class ChatServiceWithPrediction<TKey>(
 
         var searchResult = await newsArticles.Results.FirstOrDefaultAsync();
 
-        return searchResult?.Record;
+        var result = searchResult?.Record;
+        Console.WriteLine($"{result?.ReferenceLink}");
+
+        return result;
     }
 
     private async Task PersistUserQueryAsync(string query, CancellationToken cancellationToken)

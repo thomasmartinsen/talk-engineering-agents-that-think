@@ -142,11 +142,13 @@ internal sealed class ChatService<TKey>(
         {
             await newsCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
 
+            Console.WriteLine("Loading data...");
+
             var newsSources = new Dictionary<string, string>
             {
-                ["CNN Top Stories"] = "http://rss.cnn.com/rss/cnn_topstories.rss",
-                ["BBC Top Stories"] = "https://feeds.bbci.co.uk/news/rss.xml",
-                ["NY Times Top Stories"] = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+                [".NET blog"] = "https://devblogs.microsoft.com/dotnet/feed/",
+                ["Semantic Kernel blog"] = "https://devblogs.microsoft.com/semantic-kernel/feed/",
+                ["Azure AI Foundry blog"] = "https://devblogs.microsoft.com/foundry/feed/"
             };
 
             var articles = new List<TextSnippet<TKey>>();
@@ -206,6 +208,9 @@ internal sealed class ChatService<TKey>(
 
         var searchResult = await newsArticles.Results.FirstOrDefaultAsync();
 
-        return searchResult?.Record;
+        var result = searchResult?.Record;
+        Console.WriteLine($"{result?.ReferenceLink}");
+
+        return result;
     }
 }

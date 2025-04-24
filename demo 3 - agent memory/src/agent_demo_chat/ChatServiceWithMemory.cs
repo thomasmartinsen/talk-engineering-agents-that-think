@@ -67,6 +67,7 @@ internal sealed class ChatServiceWithMemory<TKey>(
             return;
         }
 
+        Console.Clear();
         Console.WriteLine("News data loading complete\n");
 
         Console.ForegroundColor = ConsoleColor.Green;
@@ -149,6 +150,8 @@ internal sealed class ChatServiceWithMemory<TKey>(
         {
             await newsCollection.CreateCollectionIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
 
+            Console.WriteLine("Loading data...");
+
             var newsSources = new Dictionary<string, string>
             {
                 [".NET blog"] = "https://devblogs.microsoft.com/dotnet/feed/",
@@ -213,7 +216,10 @@ internal sealed class ChatServiceWithMemory<TKey>(
 
         var searchResult = await newsArticles.Results.FirstOrDefaultAsync();
 
-        return searchResult?.Record;
+        var result = searchResult?.Record;
+        Console.WriteLine($"{result?.ReferenceLink}");
+
+        return result;
     }
 
     private async Task PersistUserQueryAsync(string query, CancellationToken cancellationToken)
